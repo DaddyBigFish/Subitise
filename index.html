@@ -1,0 +1,1448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Dot Drop — dice down to zero</title>
+<meta name="description" content="A dice game for little learners: drag dice onto the big one and bring it down to zero.">
+
+<!-- iPhone home-screen support -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Dot Drop">
+<meta name="theme-color" content="#F7EDE2">
+<link rel="apple-touch-icon" sizes="180x180" href="icon-180.png">
+<link rel="apple-touch-icon" sizes="152x152" href="icon-152.png">
+<link rel="apple-touch-icon" sizes="167x167" href="icon-167.png">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&display=swap" rel="stylesheet">
+
+<style>
+:root{
+  --cream:#F7EDE2;
+  --purple:#563E79;
+  --purple-deep:#43305F;
+  --purple-soft:rgba(86,62,121,.55);
+  --pink:#F5CAC3;
+  --sage:#84A59D;
+  --salmon:#F28482;
+  --gold:#FFBF2E;
+  --star:#FFCE80;
+  --sky:#7FA8CF;
+  --coral:#E89A92;
+  --pip:#FFF8EE;
+  --font:'Baloo 2','Chalkboard SE','Comic Sans MS',-apple-system,BlinkMacSystemFont,sans-serif;
+  --spring:cubic-bezier(.34,1.56,.64,1);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  margin:0;
+  font-family:var(--font);
+  background:var(--cream);
+  color:var(--purple);
+  overflow:hidden;
+  position:fixed;
+  inset:0;
+  touch-action:none;
+  -webkit-user-select:none;
+  user-select:none;
+  -webkit-touch-callout:none;
+  overscroll-behavior:none;
+}
+/* paper grain over the cream base */
+body::before{
+  content:"";
+  position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.55;
+  background-size:128px 128px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.34 0 0 0 0 0.24 0 0 0 0 0.47 0 0 0 0.045 0'/%3E%3C/filter%3E%3Crect width='128' height='128' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ---------- floating backdrop shapes ---------- */
+.blobs{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.blob{position:absolute;border-radius:50%;opacity:.30}
+.blob.b1{width:46vw;height:46vw;left:-14vw;top:-10vw;background:var(--pink)}
+.blob.b2{width:38vw;height:38vw;right:-12vw;top:22vh;background:var(--sage);opacity:.24}
+.blob.b3{width:52vw;height:52vw;left:-16vw;bottom:-18vw;background:var(--star);opacity:.34}
+.blob.b4{width:26vw;height:26vw;right:-8vw;bottom:6vh;background:var(--pink);opacity:.4}
+.sprinkle{position:absolute;opacity:.16;animation:bob 5s ease-in-out infinite}
+.sprinkle svg{display:block}
+@keyframes bob{0%,100%{transform:translateY(0) rotate(var(--r,0deg))}50%{transform:translateY(-14px) rotate(var(--r,0deg))}}
+
+/* ---------- app frame ---------- */
+#app{
+  position:fixed;inset:0;z-index:1;
+  display:flex;flex-direction:column;
+  padding:calc(env(safe-area-inset-top,0px) + 12px) calc(env(safe-area-inset-right,0px) + 16px) calc(env(safe-area-inset-bottom,0px) + 14px) calc(env(safe-area-inset-left,0px) + 16px);
+}
+header{
+  display:flex;align-items:center;justify-content:space-between;
+  min-height:48px;
+}
+.pill{
+  display:inline-flex;align-items:center;gap:7px;
+  background:#FFFBF4;border:2px solid var(--purple);
+  border-radius:999px;padding:7px 15px;
+  font-weight:700;font-size:19px;color:var(--purple);
+  box-shadow:0 3px 0 rgba(86,62,121,.16);
+}
+.pill svg{display:block}
+#starCount{min-width:18px;text-align:center}
+#starCount.bump{animation:bump .5s var(--spring)}
+@keyframes bump{0%{transform:scale(1)}40%{transform:scale(1.6) rotate(8deg)}100%{transform:scale(1)}}
+.hbtns{display:flex;gap:9px}
+.iconbtn{
+  width:46px;height:46px;border-radius:999px;border:2px solid var(--purple);
+  background:#FFFBF4;color:var(--purple);
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 3px 0 rgba(86,62,121,.16);
+  cursor:pointer;padding:0;
+  transition:transform .15s var(--spring);
+}
+.iconbtn:active{transform:scale(.88)}
+.iconbtn.off{opacity:.45}
+
+/* ---------- stage ---------- */
+#stage{
+  position:relative;flex:1;display:flex;align-items:center;justify-content:center;
+}
+#dropRing{
+  position:absolute;
+  width:calc(var(--die-size) + 58px);height:calc(var(--die-size) + 58px);
+  border:3px dashed rgba(86,62,121,.35);
+  border-radius:30px;
+  animation:ringPulse 2.6s ease-in-out infinite;
+  transition:transform .25s var(--spring),border-color .2s,background .2s;
+}
+#dropRing.hot{
+  animation:none;
+  transform:scale(1.06);
+  border-color:var(--gold);
+  border-style:solid;
+  background:rgba(255,191,46,.12);
+}
+@keyframes ringPulse{
+  0%,100%{transform:scale(1);opacity:.7}
+  50%{transform:scale(1.045);opacity:1}
+}
+#mainDie{
+  position:relative;z-index:2;
+  width:var(--die-size);height:var(--die-size);
+  border-radius:24%;
+  background:var(--purple);
+  box-shadow:
+    0 0 0 6px #FFF8EE,
+    0 0 0 9px var(--purple-deep),
+    0 16px 0 rgba(67,48,95,.20),
+    0 22px 34px rgba(67,48,95,.22);
+  display:flex;align-items:center;justify-content:center;
+  transform-origin:50% 60%;
+}
+#mainDie svg{width:82%;height:82%;display:block}
+#mainDie.pop{animation:diePop .55s var(--spring)}
+@keyframes diePop{
+  0%{transform:scale(1)}
+  30%{transform:scale(.84,1.14)}
+  62%{transform:scale(1.12,.88)}
+  100%{transform:scale(1)}
+}
+#mainDie.roll{animation:rollIn .8s cubic-bezier(.22,1.2,.36,1) both}
+@keyframes rollIn{
+  0%{transform:translateY(-70vh) rotate(-460deg)}
+  70%{transform:translateY(2vh) rotate(12deg)}
+  86%{transform:translateY(-1vh) rotate(-4deg)}
+  100%{transform:translateY(0) rotate(0)}
+}
+#mainDie.wobble{animation:wobble 2.8s ease-in-out infinite}
+@keyframes wobble{
+  0%,100%{transform:rotate(-4deg)}
+  50%{transform:rotate(4deg)}
+}
+
+/* numeral chip + readout under the die */
+#under{
+  position:absolute;left:0;right:0;
+  top:calc(50% + var(--die-size)/2 + 48px);
+  display:flex;flex-direction:column;align-items:center;gap:6px;
+  pointer-events:none;
+}
+#numChip{
+  background:#FFFBF4;border:2px solid var(--purple);border-radius:999px;
+  padding:2px 20px;font-size:24px;font-weight:800;line-height:1.25;
+  box-shadow:0 3px 0 rgba(86,62,121,.16);
+  transition:transform .2s var(--spring);
+}
+#numChip.tick{animation:bump .45s var(--spring)}
+#readout{
+  font-size:clamp(15px,4.4vw,21px);font-weight:800;color:var(--purple);
+  opacity:0;transition:opacity .3s;
+  max-width:92vw;text-align:center;line-height:1.35;
+}
+#readout.show{opacity:1}
+
+/* floating "-2" label */
+.floaty{
+  position:fixed;z-index:40;pointer-events:none;
+  font-weight:800;font-size:40px;color:var(--sage);
+  -webkit-text-stroke:2px #43305F;
+  paint-order:stroke fill;
+  animation:floatUp 1s ease-out both;
+}
+@keyframes floatUp{
+  0%{opacity:0;transform:translate(-50%,0) scale(.6)}
+  20%{opacity:1;transform:translate(-50%,-16px) scale(1.15)}
+  100%{opacity:0;transform:translate(-50%,-84px) scale(1)}
+}
+
+/* ---------- hint + tray ---------- */
+#hint{
+  text-align:center;font-size:20px;font-weight:700;color:var(--purple-soft);
+  margin:14px 0 10px;
+  display:flex;align-items:center;justify-content:center;gap:14px;
+}
+/* add mode: the target is the headline */
+body[data-mode="add"] #hint{font-size:clamp(30px,8vw,44px);font-weight:800;color:var(--purple)}
+#miniFace{display:none}
+body[data-mode="add"] #miniFace{
+  display:inline-flex;width:1.5em;height:1.5em;border-radius:24%;
+  background:var(--purple);position:relative;
+  box-shadow:0 0 0 3px #FFF8EE,0 0 0 5px rgba(67,48,95,.55),0 4px 0 rgba(67,48,95,.2);
+}
+#miniFace svg{width:78%;height:78%;margin:auto}
+#miniFace.spark{animation:miniPop .5s var(--spring)}
+#miniFace.spark::after{
+  content:"";position:absolute;inset:-35%;pointer-events:none;
+  background:radial-gradient(circle,rgba(255,191,46,.75),rgba(255,191,46,0) 65%);
+  animation:sparkFade .6s ease-out both;
+}
+@keyframes miniPop{0%{transform:scale(1)}35%{transform:scale(1.3) rotate(-6deg)}100%{transform:scale(1) rotate(0)}}
+@keyframes sparkFade{0%{opacity:1;transform:scale(.6)}100%{opacity:0;transform:scale(1.35)}}
+#tray{
+  background:#FFFBF4;
+  border:2px solid var(--purple);
+  border-radius:28px;
+  box-shadow:0 5px 0 rgba(86,62,121,.14);
+  padding:12px 10px;
+  display:flex;justify-content:center;align-items:center;
+  gap:clamp(7px,2vw,13px);
+  min-height:calc(var(--tray-die) + 24px);
+}
+.die{
+  width:var(--tray-die);height:var(--tray-die);
+  border-radius:22%;
+  transform:rotate(var(--tilt,0deg));
+  box-shadow:0 0 0 3.5px #FFF8EE,0 0 0 5.5px rgba(67,48,95,.55),0 5px 0 rgba(67,48,95,.20);
+  cursor:grab;
+  touch-action:none;
+  flex:0 0 auto;
+  display:flex;align-items:center;justify-content:center;
+  transition:transform .18s var(--spring),opacity .18s;
+  animation:trayIn .45s var(--spring) both;
+  animation-delay:var(--d,0s);
+}
+.die svg{width:80%;height:80%;pointer-events:none}
+.die:active{transform:rotate(var(--tilt,0deg)) scale(.9)}
+@keyframes trayIn{
+  0%{transform:translateY(26px) rotate(var(--tilt,0deg)) scale(.4);opacity:0}
+  100%{transform:translateY(0) rotate(var(--tilt,0deg)) scale(1);opacity:1}
+}
+.die.ghost{
+  position:fixed;left:0;top:0;z-index:60;
+  pointer-events:none;cursor:grabbing;
+  animation:none;
+  transition:none;
+  box-shadow:0 0 0 3.5px #FFF8EE,0 0 0 5.5px rgba(67,48,95,.55),0 18px 26px rgba(67,48,95,.30);
+}
+.die.ghost.returning{transition:transform .38s var(--spring)}
+
+/* ---------- start screen ---------- */
+#startScreen{
+  position:fixed;inset:0;z-index:80;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:6px;text-align:center;padding:24px;
+  background:var(--cream);
+}
+#startScreen::before{
+  content:"";position:absolute;inset:0;pointer-events:none;opacity:.55;
+  background-size:128px 128px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='128'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='matrix' values='0 0 0 0 0.34 0 0 0 0 0.24 0 0 0 0 0.47 0 0 0 0.045 0'/%3E%3C/filter%3E%3Crect width='128' height='128' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+#startDie{
+  width:min(44vw,190px);height:min(44vw,190px);
+  border-radius:24%;background:var(--salmon);
+  box-shadow:0 0 0 6px #FFF8EE,0 0 0 9px var(--purple-deep),0 16px 0 rgba(67,48,95,.20),0 22px 34px rgba(67,48,95,.22);
+  display:flex;align-items:center;justify-content:center;
+  animation:wobble 2.8s ease-in-out infinite;
+  margin-bottom:26px;position:relative;
+}
+#startDie svg{width:82%;height:82%}
+.gametitle{font-size:clamp(46px,13vw,72px);font-weight:800;line-height:1;margin:0;position:relative}
+.gametitle span{color:var(--salmon)}
+.tagline{font-size:clamp(18px,5vw,24px);font-weight:700;color:var(--purple-soft);margin:10px 0 30px;max-width:20ch;position:relative}
+#playBtn{
+  font-family:var(--font);
+  font-size:clamp(26px,7vw,34px);font-weight:800;
+  color:var(--purple-deep);
+  background:var(--gold);
+  border:3px solid var(--purple-deep);
+  border-radius:999px;
+  padding:14px 58px;
+  cursor:pointer;
+  box-shadow:0 7px 0 var(--purple-deep);
+  animation:playPulse 1.8s ease-in-out infinite;
+  position:relative;
+}
+#playBtn:active{transform:translateY(5px);box-shadow:0 2px 0 var(--purple-deep);animation:none}
+@keyframes playPulse{
+  0%,100%{transform:scale(1)}
+  50%{transform:scale(1.06)}
+}
+.parentnote{margin-top:30px;font-size:14px;font-weight:600;color:var(--purple-soft);position:relative}
+
+/* ---------- celebration ---------- */
+#celebrate{
+  position:fixed;inset:0;z-index:70;pointer-events:none;
+  display:flex;align-items:flex-start;justify-content:center;
+  padding-top:calc(env(safe-area-inset-top,0px) + 14vh);
+  opacity:0;transition:opacity .25s;
+}
+#celebrate.show{opacity:1}
+#zeroWrap{
+  text-align:center;
+  background:#FFFBF4;
+  border:3px solid var(--purple);
+  border-radius:30px;
+  box-shadow:0 8px 0 rgba(67,48,95,.18);
+  padding:24px 34px 20px;
+  transform:rotate(-2deg);
+}
+#zeroWrap svg{display:block;overflow:visible;margin:0 auto}
+#celebrate.play #zeroText{animation:zeroIn .8s var(--spring) both .1s}
+@keyframes zeroIn{
+  0%{transform:scale(0) rotate(-14deg)}
+  60%{transform:scale(1.18) rotate(4deg)}
+  100%{transform:scale(1) rotate(0)}
+}
+#zeroSub{
+  font-size:clamp(26px,7.5vw,38px);font-weight:800;color:var(--purple);
+  opacity:0;margin-top:6px;
+}
+#celebrate.play #zeroSub{animation:subIn .5s ease-out both .55s}
+@keyframes subIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+#confetti{position:fixed;inset:0;z-index:65;pointer-events:none}
+
+:root{--die-size:clamp(170px,52vw,270px);--tray-die:clamp(46px,13vw,66px)}
+@media (max-height:600px){:root{--die-size:clamp(140px,38vh,220px)}}
+
+/* roomy screens: cozy centered column + scaled-up controls pinned to the corners */
+@media (min-width:700px) and (min-height:500px){
+  #app{max-width:680px;margin-left:auto;margin-right:auto;
+    padding-top:calc(env(safe-area-inset-top,0px) + 78px)}
+  header{
+    position:fixed;top:0;left:0;right:0;z-index:30;
+    padding:calc(env(safe-area-inset-top,0px) + 12px) calc(env(safe-area-inset-right,0px) + 16px) 0 calc(env(safe-area-inset-left,0px) + 16px);
+  }
+  #tray{width:100%}
+  #hint{font-size:26px}
+  .pill{font-size:24px}
+  .iconbtn{width:56px;height:56px}
+  /* celebration card centred on big screens */
+  #celebrate{align-items:center;padding-top:0;padding-bottom:6vh}
+  /* start screen scales up too */
+  #startDie{width:min(30vw,260px);height:min(30vw,260px);margin-bottom:34px}
+  .gametitle{font-size:clamp(60px,9vw,96px)}
+  .tagline{font-size:clamp(20px,3vw,28px);max-width:26ch;margin-bottom:38px}
+  #playBtn{font-size:clamp(30px,4.5vw,40px);padding:16px 70px}
+  .parentnote{font-size:16px}
+  /* mode menu scaled up (body prefix beats the later base rules) */
+  body .modeCard{padding:26px;gap:16px}
+  body .modeTitle{font-size:22px}
+  body .modeRow{font-size:30px;padding:14px 32px 14px 14px;gap:18px}
+  body .modeGlyph{width:64px;height:64px;font-size:38px}
+}
+/* iPad portrait sizing */
+@media (min-width:700px) and (orientation:portrait){
+  :root{--die-size:clamp(240px,50vw,400px);--tray-die:clamp(60px,11.5vw,92px)}
+}
+
+/* landscape / iPad side-by-side layout: vertical dice rail on the right */
+@media (orientation:landscape){
+  :root{--die-size:clamp(200px,46vh,380px);--tray-die:clamp(56px,12vh,92px)}
+  #app{
+    display:grid;
+    grid-template-areas:"head head" "stage tray";
+    grid-template-rows:auto 1fr;
+    grid-template-columns:auto auto;
+    justify-content:center;
+    column-gap:34px;
+  }
+  header{grid-area:head}
+  #stage{grid-area:stage;width:calc(var(--die-size) + 90px)}
+  /* hint pinned just above the drop zone, no layout row */
+  #hint{
+    grid-area:stage;z-index:3;pointer-events:none;
+    position:absolute;left:50%;
+    top:calc(50% - (var(--die-size) + 58px)/2 - 26px);
+    transform:translate(-50%,-100%);
+    margin:0;text-align:center;width:max-content;max-width:100%;
+  }
+  body.challenge #hint{top:calc(50% - (var(--die-size) + 58px)/2 - 102px)}
+  #tray{
+    grid-area:tray;align-self:center;justify-self:center;
+    display:flex;flex-direction:column;
+    gap:12px;
+    min-height:0;
+    padding:14px 12px;
+  }
+  /* target sits on one line in landscape so it never runs off the bottom */
+  #under{top:calc(50% + var(--die-size)/2 + 40px)}
+  body[data-mode="add"] #targetWrap{flex-direction:row;align-items:baseline;gap:10px}
+  body[data-mode="add"] #targetBig{font-size:clamp(40px,9vh,64px)}
+  body[data-mode="add"] #makeLabel{font-size:18px}
+}
+/* short landscape screens (phones): compact die, two-column tray, tight under-row */
+/* iOS in a browser (not full-screen app): keep content clear of Safari's floating toolbar */
+@media (min-height:500px){
+  .browser #app{padding-bottom:calc(env(safe-area-inset-bottom,0px) + 60px)}
+}
+@media (orientation:landscape) and (min-height:500px){
+  .browser{--die-size:clamp(180px,42vh,340px)}
+}
+
+/* short landscape phones only - never iPads, even when browser bars shrink the height */
+@media (orientation:landscape) and (max-height:699px) and (max-width:999px){
+  :root{--die-size:clamp(120px,34vh,170px)}
+  #under{top:calc(50% + var(--die-size)/2 + 20px)}
+  #hint{font-size:17px}
+  body[data-mode="add"] #makeLabel{display:none}
+  body[data-mode="add"] #targetBig{font-size:clamp(30px,9vh,44px)}
+  #tray{
+    display:grid;
+    grid-template-columns:repeat(2,auto);
+    gap:10px;
+  }
+}
+
+/* ---------- mode menu ---------- */
+#modeBtn{cursor:pointer;font-family:var(--font);padding:7px 16px}
+#modeGlyph{display:inline-block;min-width:20px;text-align:center;font-size:26px;line-height:1;font-weight:800}
+#modeMenu{
+  position:fixed;inset:0;z-index:90;
+  background:rgba(86,62,121,.28);
+  display:flex;align-items:center;justify-content:center;
+  opacity:0;pointer-events:none;transition:opacity .22s;
+}
+#modeMenu.open{opacity:1;pointer-events:auto}
+.modeCard{
+  background:#FFFBF4;border:3px solid var(--purple);border-radius:30px;
+  box-shadow:0 8px 0 rgba(67,48,95,.20);
+  padding:20px;display:flex;flex-direction:column;gap:13px;
+  transform:scale(.85) rotate(-1.5deg);transition:transform .28s var(--spring);
+}
+#modeMenu.open .modeCard{transform:scale(1) rotate(-1.5deg)}
+.modeTitle{text-align:center;font-weight:800;font-size:19px;color:var(--purple-soft)}
+.modeRow{
+  display:flex;align-items:center;gap:15px;
+  background:#fff;border:2px solid var(--purple);border-radius:22px;
+  padding:10px 26px 10px 11px;
+  font-family:var(--font);font-size:25px;font-weight:800;color:var(--purple);
+  cursor:pointer;box-shadow:0 4px 0 rgba(86,62,121,.14);
+  transition:transform .15s var(--spring);
+}
+.modeRow:active{transform:scale(.95)}
+.modeRow.current{outline:3.5px solid var(--gold);outline-offset:2px}
+.modeGlyph{
+  width:52px;height:52px;border-radius:50%;flex:0 0 auto;
+  display:flex;align-items:center;justify-content:center;
+  font-size:32px;font-weight:800;color:#FFF8EE;
+  border:2.5px solid rgba(67,48,95,.5);
+  text-shadow:0 2px 0 rgba(67,48,95,.35);
+}
+
+/* ---------- numeral cards (subitise mode) ---------- */
+.die.num{
+  font-size:calc(var(--tray-die)*.62);
+  font-weight:800;color:#FFF8EE;
+  text-shadow:0 2.5px 0 rgba(67,48,95,.35);
+}
+.die.num.wrong{animation:wiggle .45s}
+@keyframes wiggle{
+  0%,100%{transform:rotate(var(--tilt,0deg)) translateX(0)}
+  25%{transform:rotate(var(--tilt,0deg)) translateX(-7px)}
+  75%{transform:rotate(var(--tilt,0deg)) translateX(7px)}
+}
+#numChip{display:none}
+body[data-mode="subitise"] #readout{display:none}
+body[data-mode="add"] #readout{display:none}
+body[data-mode="add"] #mainDie{display:none}
+body[data-mode="add"] #dropRing{background:rgba(255,251,244,.55)}
+
+/* ---------- challenge mode ---------- */
+#trophyBtn{display:none}
+body[data-mode="subitise"] #trophyBtn{display:flex}
+#trophyBtn.on{background:var(--gold)}
+body.challenge #starPill{display:none}
+/* challenge: accumulating star row below the dice face */
+#starRow{display:none;gap:clamp(4px,1.4vw,7px);justify-content:center;margin-top:8px}
+body.challenge #starRow{display:flex}
+.cstar{position:relative;width:clamp(46px,13vw,62px);height:clamp(46px,13vw,62px)}
+.cstar svg{position:absolute;inset:0;width:100%;height:100%}
+.cstar .st{inset:6%}
+.cstar .glow{position:absolute;left:50%;top:52%;width:150%;height:150%;
+  transform:translate(-50%,-52%) scale(.6);border-radius:50%;
+  background:radial-gradient(circle,rgba(255,191,46,.6),rgba(255,191,46,0) 68%);
+  opacity:0}
+.cstar.super .glow{opacity:1;transform:translate(-50%,-52%) scale(1);animation:starGlow 1.5s ease-in-out infinite;
+  background:radial-gradient(circle,rgba(143,198,232,.65),rgba(143,198,232,0) 68%)}
+.cstar .mini{position:absolute;width:44%;height:44%;opacity:0;z-index:3}
+.cstar .mini.m1{top:-4%;right:-6%}
+.cstar .mini.m2{bottom:2%;left:-7%}
+.cstar.super .mini{animation:twinkle 1.3s ease-in-out infinite}
+.cstar.newgot .st{animation:starPop .55s var(--spring)}
+.cstar.newsuper .glow{animation:glowIn .6s var(--spring)}
+.cstar.newsuper .st{animation:bump .5s var(--spring)}
+@keyframes starPop{0%{transform:scale(0) rotate(-30deg)}100%{transform:scale(1) rotate(0)}}
+@keyframes glowIn{0%{transform:translate(-50%,-52%) scale(0);opacity:0}70%{transform:translate(-50%,-52%) scale(1.2);opacity:1}100%{transform:translate(-50%,-52%) scale(1)}}
+@keyframes starGlow{0%,100%{transform:translate(-50%,-52%) scale(1);opacity:.8}50%{transform:translate(-50%,-52%) scale(1.15);opacity:1}}
+/* big countdown banner above the dice face */
+#bigTimer{
+  position:absolute;left:50%;z-index:3;
+  top:calc(50% - (var(--die-size) + 58px)/2 - 26px);
+  transform:translate(-50%,-100%);
+  display:none;align-items:center;justify-content:center;
+  min-width:96px;padding:6px 22px;
+  background:#FFFBF4;border:3px solid var(--purple);border-radius:999px;
+  box-shadow:0 5px 0 rgba(86,62,121,.16);
+  font-size:clamp(32px,9vw,48px);font-weight:800;color:var(--purple);
+  line-height:1.1;
+}
+body.challenge #bigTimer{display:flex}
+#bigTimer.low{color:var(--salmon);border-color:var(--salmon);animation:lowPulse 1s ease-in-out infinite}
+@keyframes lowPulse{50%{transform:translate(-50%,-100%) scale(1.12)}}
+@media (orientation:landscape) and (max-height:699px) and (max-width:999px){
+  #bigTimer{font-size:30px;min-width:72px;padding:3px 14px;
+    top:calc(50% - (var(--die-size) + 58px)/2 + 4px);transform:translate(-50%,0)}
+  #bigTimer.low{animation:none;color:var(--salmon);border-color:var(--salmon)}
+}
+/* trophy in the celebration card after a challenge win */
+body.challenge #zeroSub{display:none}
+#trophyStage{display:none;position:relative;width:150px;height:150px;margin:12px auto 2px}
+body.challenge #trophyStage{display:block}
+#winTrophy{position:relative;width:100%;height:100%;z-index:2}
+#trophyGlow{
+  position:absolute;inset:-32px;border-radius:50%;
+  background:radial-gradient(circle,rgba(255,191,46,.55),rgba(255,191,46,0) 65%);
+  animation:glowPulse 1.6s ease-in-out infinite;
+}
+.tspark{position:absolute;z-index:3;animation:twinkle 1.4s ease-in-out infinite}
+#celebrate.play #trophyStage{animation:trophyIn .7s var(--spring) both .3s}
+@keyframes trophyIn{0%{transform:scale(0) rotate(-12deg)}60%{transform:scale(1.15) rotate(4deg)}100%{transform:scale(1) rotate(0)}}
+@keyframes glowPulse{0%,100%{transform:scale(1);opacity:.75}50%{transform:scale(1.12);opacity:1}}
+@keyframes twinkle{0%,100%{opacity:0;transform:scale(.4) rotate(0deg)}50%{opacity:1;transform:scale(1) rotate(25deg)}}
+#failPop{
+  position:fixed;inset:0;z-index:95;
+  background:rgba(86,62,121,.28);
+  display:flex;align-items:center;justify-content:center;
+  opacity:0;pointer-events:none;transition:opacity .22s;
+}
+#failPop.open{opacity:1;pointer-events:auto}
+.failCard{align-items:center;text-align:center;gap:8px;min-width:230px;
+  transform:scale(.85) rotate(1.5deg)}
+#failPop.open .failCard{transform:scale(1) rotate(1.5deg)}
+.failText{font-size:30px;font-weight:800}
+.failHint{font-size:15px;font-weight:700;color:var(--purple-soft)}
+
+/* dynamic viewport height: keeps browser mode (Safari's bars) sized like the full-screen app */
+@supports (height:1dvh){
+  #celebrate{padding-top:calc(env(safe-area-inset-top,0px) + 14dvh)}
+  @media (min-width:700px) and (min-height:500px){
+    #celebrate{padding-top:0;padding-bottom:6dvh}
+  }
+  @media (orientation:landscape){
+    :root{--die-size:clamp(200px,46dvh,380px);--tray-die:clamp(56px,12dvh,92px)}
+    body[data-mode="add"] #targetBig{font-size:clamp(40px,9dvh,64px)}
+  }
+  @media (orientation:landscape) and (min-height:500px){
+    .browser{--die-size:clamp(180px,42dvh,340px)}
+  }
+  @media (orientation:landscape) and (max-height:699px) and (max-width:999px){
+    :root{--die-size:clamp(120px,34dvh,170px)}
+    body[data-mode="add"] #targetBig{font-size:clamp(30px,9dvh,44px)}
+  }
+}
+
+/* short screens (browser landscape, sideways phones): compact start screen so nothing is clipped */
+@media (max-height:700px){
+  #startDie{width:min(34vh,200px);height:min(34vh,200px);margin-bottom:16px}
+  .gametitle{font-size:clamp(38px,9vh,64px)}
+  .tagline{font-size:clamp(16px,3.2vh,22px);margin:6px 0 20px}
+  #playBtn{font-size:clamp(22px,5.5vh,32px);padding:10px 46px}
+  .parentnote{margin-top:18px;font-size:13px}
+}
+
+
+/* addition: building-blocks row + big target */
+#buildRow{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2;
+  width:calc(var(--die-size) + 40px);
+  display:grid;justify-content:center;align-content:center;justify-items:center;
+  gap:10px 8px;padding:0;pointer-events:none;
+}
+.bunit.new,.bplus.new,.vplus.new{animation:trayIn .45s var(--spring) both}
+.bunit{display:flex;flex-direction:column;align-items:center;gap:5px;flex:0 0 auto}
+.bnum{font-size:calc(var(--bdie,72px)*.4);font-weight:800;color:var(--purple);line-height:1}
+.bdie{
+  width:var(--bdie,72px);height:var(--bdie,72px);border-radius:22%;
+  box-shadow:0 0 0 3.5px #FFF8EE,0 0 0 5.5px rgba(67,48,95,.55),0 5px 0 rgba(67,48,95,.20);
+  display:flex;align-items:center;justify-content:center;
+}
+.bdie svg{width:80%;height:80%}
+.bplus{font-size:calc(var(--bdie,72px)*.44);font-weight:800;color:var(--purple);width:calc(var(--bdie,72px)*.34);text-align:center;align-self:center}
+.vplus{font-size:calc(var(--bdie,72px)*.44);font-weight:800;color:var(--purple);line-height:1;justify-self:center}
+#targetWrap{display:none;flex-direction:column;align-items:center;line-height:1;margin-top:2px}
+#makeLabel{font-size:16px;font-weight:800;color:var(--purple-soft);letter-spacing:.06em}
+#targetBig{font-size:clamp(58px,17vw,92px);font-weight:800;color:var(--purple);line-height:1}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="starGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFE08A"/><stop offset=".55" stop-color="#FFBF2E"/><stop offset="1" stop-color="#F28482"/></linearGradient><linearGradient id="gemGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#D6F0FF"/><stop offset=".55" stop-color="#8FC6E8"/><stop offset="1" stop-color="#5B8DB8"/></linearGradient></defs></svg>
+
+<!-- floating backdrop -->
+<div class="blobs" aria-hidden="true">
+  <div class="blob b1"></div><div class="blob b2"></div>
+  <div class="blob b3"></div><div class="blob b4"></div>
+  <div class="sprinkle" style="left:12%;top:16%;--r:12deg"><svg width="22" height="22" viewBox="0 0 24 24"><path d="M12 3v18M3 12h18" stroke="#563E79" stroke-width="4" stroke-linecap="round"/></svg></div>
+  <div class="sprinkle" style="right:14%;top:11%;--r:-8deg;animation-delay:-2s"><svg width="18" height="18" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none" stroke="#F28482" stroke-width="4"/></svg></div>
+  <div class="sprinkle" style="left:8%;top:56%;--r:20deg;animation-delay:-1s"><svg width="16" height="16" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#84A59D"/></svg></div>
+  <div class="sprinkle" style="right:9%;top:48%;--r:-16deg;animation-delay:-3.4s"><svg width="20" height="20" viewBox="0 0 24 24"><path d="M12 3v18M3 12h18" stroke="#F28482" stroke-width="4" stroke-linecap="round"/></svg></div>
+  <div class="sprinkle" style="left:20%;bottom:24%;--r:6deg;animation-delay:-2.6s"><svg width="14" height="14" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none" stroke="#563E79" stroke-width="4"/></svg></div>
+  <div class="sprinkle" style="right:22%;bottom:30%;--r:-10deg;animation-delay:-4.2s"><svg width="15" height="15" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="#FFBF2E"/></svg></div>
+</div>
+
+<div id="app">
+  <header>
+    <div class="hbtns">
+      <button class="pill" id="modeBtn" aria-label="change game mode"><span id="modeGlyph">−</span></button>
+      <div class="pill" id="starPill" aria-label="stars earned">
+        <svg width="22" height="22" viewBox="0 0 24 24"><path d="M12 2.2l2.9 6.2 6.8.8-5 4.6 1.4 6.7-6.1-3.4-6.1 3.4 1.4-6.7-5-4.6 6.8-.8z" fill="#FFBF2E" stroke="#43305F" stroke-width="1.6" stroke-linejoin="round"/></svg>
+        <span id="starCount">0</span>
+      </div>
+    </div>
+    <div class="hbtns">
+      <button class="iconbtn" id="trophyBtn" aria-label="challenge mode">
+        <svg width="24" height="24" viewBox="0 0 24 24"><path d="M7 3.5h10V8a5 5 0 0 1-10 0z" fill="#43305F"/><path d="M7 4.8H4.4a2.6 2.6 0 0 0 2.8 4.1M17 4.8h2.6a2.6 2.6 0 0 1-2.8 4.1" fill="none" stroke="#43305F" stroke-width="1.9" stroke-linecap="round"/><path d="M12 13.2v3.2" stroke="#43305F" stroke-width="2.2" stroke-linecap="round"/><path d="M8.6 20.5h6.8M10 16.8h4" stroke="#43305F" stroke-width="2.2" stroke-linecap="round"/></svg>
+      </button>
+      <button class="iconbtn" id="soundBtn" aria-label="sound on or off">
+        <svg id="soundOnIco" width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M4 9.5v5h3.5L13 19V5L7.5 9.5H4z" fill="#563E79"/><path d="M16 9c1.4 1.6 1.4 4.4 0 6M18.5 7c2.4 2.8 2.4 7.2 0 10" stroke="#563E79" stroke-width="2" stroke-linecap="round"/></svg>
+        <svg id="soundOffIco" width="22" height="22" viewBox="0 0 24 24" fill="none" style="display:none"><path d="M4 9.5v5h3.5L13 19V5L7.5 9.5H4z" fill="#563E79"/><path d="M16 9l6 6M22 9l-6 6" stroke="#F28482" stroke-width="2.4" stroke-linecap="round"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div id="stage">
+    <div id="dropRing"></div>
+    <div id="bigTimer"><span id="bigTimerNum">40</span></div>
+    <div id="mainDie"></div>
+    <div id="buildRow"></div>
+    <div id="under">
+      <div id="numChip">6</div>
+      <div id="readout"></div>
+      <div id="targetWrap"><span id="makeLabel">make</span><span id="targetBig">5</span></div>
+      <div id="starRow"></div>
+    </div>
+  </div>
+
+  <div id="hint"><span id="hintText">Drag the dice to make 0!</span><span id="miniFace"></span></div>
+  <div id="tray"></div>
+</div>
+
+<!-- mode menu -->
+<div id="modeMenu">
+  <div class="modeCard">
+    <div class="modeTitle">Choose a game</div>
+    <button class="modeRow" data-mode="add"><span class="modeGlyph" style="background:var(--gold)">+</span>Add</button>
+    <button class="modeRow" data-mode="subtract"><span class="modeGlyph" style="background:var(--salmon)">−</span>Take away</button>
+    <button class="modeRow" data-mode="subitise"><span class="modeGlyph" style="background:var(--sky)">?</span>Subitise</button>
+  </div>
+</div>
+
+<!-- challenge fail popup -->
+<div id="failPop">
+  <div class="modeCard failCard">
+    <svg width="76" height="76" viewBox="0 0 100 100"><path d="M28 28 L72 72 M72 28 L28 72" stroke="#43305F" stroke-width="20" stroke-linecap="round"/><path d="M28 28 L72 72 M72 28 L28 72" stroke="#F28482" stroke-width="12" stroke-linecap="round"/></svg>
+    <div class="failText">Try again!</div>
+    <div class="failHint">tap anywhere</div>
+  </div>
+</div>
+
+<!-- start screen -->
+<div id="startScreen">
+  <div id="startDie"></div>
+  <h1 class="gametitle">Dot <span>Drop</span></h1>
+  <p class="tagline">Take the dots away and make zero!</p>
+  <button id="playBtn">PLAY</button>
+  <p class="parentnote">For ages 3–5 · subitising, adding &amp; taking away to 6</p>
+</div>
+
+<!-- celebration -->
+<canvas id="confetti"></canvas>
+<div id="celebrate">
+  <div id="zeroWrap">
+    <svg id="zeroText" width="320" height="130" viewBox="0 0 320 130" style="width:min(80vw,360px);height:auto">
+      <text id="zeroTextTxt" x="160" y="98" text-anchor="middle" font-family="'Baloo 2','Chalkboard SE',sans-serif" font-size="104" font-weight="800" fill="#84A59D" stroke="#563E79" stroke-width="14" stroke-linejoin="round" paint-order="stroke">ZERO!</text>
+    </svg>
+    <div id="zeroSub">You took it all away!</div>
+    <div id="trophyStage">
+      <div id="trophyGlow"></div>
+      <svg class="tspark" style="left:2%;top:4%" width="24" height="24" viewBox="0 0 24 24"><path d="M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z" fill="#FFBF2E" stroke="#43305F" stroke-width="1.4" stroke-linejoin="round"/></svg>
+      <svg class="tspark" style="right:3%;top:10%;animation-delay:-.5s" width="17" height="17" viewBox="0 0 24 24"><path d="M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z" fill="#FFF8EE" stroke="#43305F" stroke-width="1.4" stroke-linejoin="round"/></svg>
+      <svg class="tspark" style="left:8%;bottom:10%;animation-delay:-.9s" width="16" height="16" viewBox="0 0 24 24"><path d="M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z" fill="#FFBF2E" stroke="#43305F" stroke-width="1.4" stroke-linejoin="round"/></svg>
+      <svg class="tspark" style="right:7%;bottom:2%;animation-delay:-.3s" width="22" height="22" viewBox="0 0 24 24"><path d="M12 2l2.2 7.8L22 12l-7.8 2.2L12 22l-2.2-7.8L2 12l7.8-2.2z" fill="#FFBF2E" stroke="#43305F" stroke-width="1.4" stroke-linejoin="round"/></svg>
+      <svg id="winTrophy" viewBox="0 0 100 100">
+        <path d="M28 13h44v17a22 22 0 0 1-44 0z" fill="#FFBF2E" stroke="#43305F" stroke-width="3.5" stroke-linejoin="round"/>
+        <path d="M28 17H15a12.5 12.5 0 0 0 13.5 14.5M72 17h13a12.5 12.5 0 0 1-13.5 14.5" fill="none" stroke="#43305F" stroke-width="3.5" stroke-linecap="round"/>
+        <path d="M47 52h6v12h-6z" fill="#FFBF2E" stroke="#43305F" stroke-width="3.5" stroke-linejoin="round"/>
+        <path d="M41 64h18v8a7 7 0 0 1-7 7h-6a7 7 0 0 1-7-7z" fill="#FFBF2E" stroke="#43305F" stroke-width="3.5" stroke-linejoin="round"/>
+        <path d="M34 86h32" stroke="#43305F" stroke-width="4.5" stroke-linecap="round"/>
+        <path d="M50 21l2.6 5.6 6.1.7-4.5 4.2 1.3 5.9-5.5-3-5.5 3 1.3-5.9-4.5-4.2 6.1-.7z" fill="#FFF8EE"/>
+      </svg>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+/* on iOS in a browser tab, Safari's floating bars cover the bottom edge -
+   mark it so we can lift the layout clear of them */
+try{
+  const ios=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  const standalone=navigator.standalone===true||matchMedia('(display-mode: standalone)').matches;
+  if(ios&&!standalone)document.documentElement.classList.add('browser');
+}catch(e){}
+const $=s=>document.querySelector(s);
+const rand=(a,b)=>a+Math.random()*(b-a);
+const irand=(a,b)=>Math.floor(rand(a,b+1));
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const store={
+  get(k){try{return localStorage.getItem(k)}catch(e){return null}},
+  set(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+};
+
+/* ---------------- dice faces ---------------- */
+const PIPS={
+  1:[[50,50]],
+  2:[[28,28],[72,72]],
+  3:[[28,28],[50,50],[72,72]],
+  4:[[28,28],[72,28],[28,72],[72,72]],
+  5:[[28,28],[72,28],[50,50],[28,72],[72,72]],
+  6:[[28,28],[72,28],[28,50],[72,50],[28,72],[72,72]]
+};
+const DIE_COLORS={1:'#F28482',2:'#84A59D',3:'#FFBF2E',4:'#7FA8CF',5:'#E89A92',6:'#563E79'};
+
+function faceSVG(v,blank){
+  if(v===0&&blank)return '<svg viewBox="0 0 100 100"></svg>';
+  if(v===0){ // happy face for zero
+    return `<svg viewBox="0 0 100 100">
+      <circle cx="34" cy="38" r="7" fill="#FFF8EE" stroke="#43305F" stroke-width="3"/>
+      <circle cx="66" cy="38" r="7" fill="#FFF8EE" stroke="#43305F" stroke-width="3"/>
+      <circle cx="25" cy="54" r="7.5" fill="#F5CAC3" opacity=".85"/>
+      <circle cx="75" cy="54" r="7.5" fill="#F5CAC3" opacity=".85"/>
+      <path d="M30 55 Q50 76 70 55" fill="none" stroke="#FFF8EE" stroke-width="7" stroke-linecap="round"/>
+      <path d="M30 55 Q50 76 70 55" fill="none" stroke="#43305F" stroke-width="2.4" stroke-linecap="round" opacity=".5"/>
+    </svg>`;
+  }
+  const dots=PIPS[v].map(p=>
+    `<circle cx="${p[0]}" cy="${p[1]}" r="10.5" fill="#FFF8EE" stroke="#43305F" stroke-width="2.6" opacity="1"/>`).join('');
+  return `<svg viewBox="0 0 100 100">${dots}</svg>`;
+}
+/* green tick shown on the face for a correct challenge answer */
+function tickSVG(){
+  return `<svg viewBox="0 0 100 100">
+    <path d="M26 53 L43 70 L75 35" fill="none" stroke="#43305F" stroke-width="16" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M26 53 L43 70 L75 35" fill="none" stroke="#84A59D" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+}
+/* big written numeral for the main square (add / take-away modes) */
+function numberFaceSVG(v){
+  return `<svg viewBox="0 0 100 100"><text x="50" y="69" text-anchor="middle" font-family="'Baloo 2','Chalkboard SE',sans-serif" font-size="64" font-weight="800" fill="#FFF8EE">${v}</text></svg>`;
+}
+function renderFace(){
+  if(state.mode==='subitise'){
+    mainDie.style.background=state.challenge?'':DIE_COLORS[state.value];
+    mainDie.innerHTML=faceSVG(state.value);
+  }else{
+    mainDie.style.background='';
+    mainDie.innerHTML=numberFaceSVG(state.mode==='add'?state.target:state.main);
+  }
+}
+
+/* ---------------- audio ---------------- */
+let AC=null, soundOn=store.get('dotdrop.sound')!=='off';
+function audio(){
+  if(!AC){ try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){return null;} }
+  // recover from suspended AND interrupted (iOS pauses audio on lock/Siri/other apps)
+  if(AC&&AC.state!=='running'){ try{const p=AC.resume(); if(p&&p.catch)p.catch(()=>{});}catch(e){} }
+  return AC;
+}
+/* re-arm audio whenever the app is visible again or the screen is touched */
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)audio();});
+addEventListener('pointerdown',()=>{audio();});
+function tone(f0,f1,t,dur,type,vol){
+  if(!soundOn)return; const ac=audio(); if(!ac)return;
+  const o=ac.createOscillator(),g=ac.createGain();
+  o.type=type||'sine';
+  o.frequency.setValueAtTime(f0,t);
+  if(f1&&f1!==f0)o.frequency.exponentialRampToValueAtTime(f1,t+dur);
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(vol,t+0.012);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.connect(g);g.connect(ac.destination);
+  o.start(t);o.stop(t+dur+0.05);
+}
+function playPickup(){const ac=audio();if(!ac)return;tone(340,520,ac.currentTime,.09,'triangle',.12);}
+function playPop(){const ac=audio();if(!ac)return;const t=ac.currentTime;tone(430,150,t,.16,'sine',.28);tone(880,420,t,.08,'triangle',.08);}
+function playWin(){
+  const ac=audio();if(!ac)return;const t=ac.currentTime;
+  [523.25,659.25,783.99,1046.5].forEach((f,i)=>tone(f,f,t+i*.13,.22,'triangle',.2));
+  tone(1568,1568,t+.58,.3,'sine',.1);tone(2093,2093,t+.72,.4,'sine',.07);
+}
+function playThud(){const ac=audio();if(!ac)return;tone(180,90,ac.currentTime,.12,'sine',.15);}
+function playWrong(){const ac=audio();if(!ac)return;const t=ac.currentTime;tone(210,150,t,.16,'sine',.14);tone(150,110,t+.12,.2,'sine',.1);}
+
+/* ---------------- character voice (challenge mode) ---------------- */
+/* recorded clips decoded once into WebAudio buffers: identical friendly British
+   voice on every device, zero playback lag, no file churn during play */
+const NUMKEYS=['one','two','three','four','five','six'];
+const VOICE_KEYS=NUMKEYS.concat(['wrong','timeout','win']);
+const VOICE_V='v11'; /* bump per release so no device serves stale mixed clips */
+const VBUF={};
+let voiceLoading=null;
+function loadVoices(){
+  if(voiceLoading)return voiceLoading;
+  const ac=audio();
+  if(!ac){voiceLoading=Promise.resolve();return voiceLoading;}
+  voiceLoading=Promise.all(VOICE_KEYS.map(k=>
+    VBUF[k]?Promise.resolve():
+    fetch('voice/ryan/'+k+'.mp3?'+VOICE_V)
+      .then(r=>r.arrayBuffer())
+      .then(b=>ac.decodeAudioData(b))
+      .then(buf=>{VBUF[k]=buf;})
+      .catch(()=>{})
+  )).finally(()=>{voiceLoading=null;});
+  return voiceLoading;
+}
+function speakChar(key){
+  if(!soundOn)return;
+  if(VBUF[key]){playVoice(key);return;}
+  /* not decoded yet: fetch now, play as soon as ready */
+  loadVoices().then(()=>{if(soundOn&&VBUF[key])playVoice(key);});
+}
+function playVoice(key){
+  const ac=audio();if(!ac)return;
+  try{
+    const src=ac.createBufferSource();
+    src.buffer=VBUF[key];
+    src.connect(ac.destination);
+    src.start();
+  }catch(e){}
+}
+
+/* ---------------- confetti ---------------- */
+const cvs=$('#confetti'),ctx=cvs.getContext('2d');
+let parts=[],rafId=null;
+function sizeCanvas(){cvs.width=innerWidth*devicePixelRatio;cvs.height=innerHeight*devicePixelRatio;ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);}
+sizeCanvas();addEventListener('resize',()=>{sizeCanvas();if(state.mode==='add'&&state.steps.length)renderBuild();});
+const CONF=['#F28482','#84A59D','#FFBF2E','#7FA8CF','#F5CAC3','#563E79','#FFCE80'];
+function burst(x,y,n,vxMin,vxMax,vyMin,vyMax){
+  for(let i=0;i<n;i++){
+    parts.push({
+      x:x,y:y,
+      vx:rand(vxMin,vxMax),vy:rand(vyMin,vyMax),
+      w:rand(6,12),h:rand(8,16),
+      rot:rand(0,Math.PI*2),vr:rand(-.25,.25),
+      color:CONF[irand(0,CONF.length-1)],
+      shape:Math.random()<.25?'star':(Math.random()<.5?'rect':'dot'),
+      fl:rand(0,Math.PI*2),life:0,max:irand(140,230)
+    });
+  }
+  if(!rafId)tick();
+}
+function drawStar(c,r){
+  c.beginPath();
+  for(let i=0;i<5;i++){
+    const a=-Math.PI/2+i*2*Math.PI/5, b=a+Math.PI/5;
+    c.lineTo(Math.cos(a)*r,Math.sin(a)*r);
+    c.lineTo(Math.cos(b)*r*.45,Math.sin(b)*r*.45);
+  }
+  c.closePath();c.fill();
+}
+function tick(){
+  rafId=requestAnimationFrame(tick);
+  ctx.clearRect(0,0,innerWidth,innerHeight);
+  parts=parts.filter(p=>p.life<p.max&&p.y<innerHeight+50);
+  if(!parts.length){cancelAnimationFrame(rafId);rafId=null;ctx.clearRect(0,0,innerWidth,innerHeight);return;}
+  for(const p of parts){
+    p.life++;p.fl+=.12;
+    p.x+=p.vx+Math.sin(p.fl)*1.4;
+    p.y+=p.vy;p.vy+=.26;p.vx*=.985;
+    p.rot+=p.vr;
+    ctx.save();
+    ctx.translate(p.x,p.y);ctx.rotate(p.rot);
+    ctx.fillStyle=p.color;
+    ctx.globalAlpha=clamp(1.2-p.life/p.max,0,1);
+    if(p.shape==='rect')ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);
+    else if(p.shape==='dot'){ctx.beginPath();ctx.arc(0,0,p.w/2,0,7);ctx.fill();}
+    else drawStar(ctx,p.w*.9);
+    ctx.restore();
+  }
+}
+
+/* ---------------- game state ---------------- */
+const mainDie=$('#mainDie'),tray=$('#tray'),numChip=$('#numChip'),
+      readout=$('#readout'),dropRing=$('#dropRing'),
+      starCount=$('#starCount'),celebrateEl=$('#celebrate'),
+      buildRow=$('#buildRow'),starRow=$('#starRow');
+const MODES={
+  subtract:{glyph:'−'},
+  add:{glyph:'+'},
+  subitise:{glyph:'?'}
+};
+const state={
+  mode:store.get('dotdrop.mode')||'subtract',
+  main:6,start:6,target:0,value:0,last:0,steps:[],
+  stars:+(store.get('dotdrop.stars')||0),
+  celebrating:false,
+  challenge:false,streak:0,timeLeft:40,timerId:null,lastWord:''
+};
+starCount.textContent=state.stars;
+document.body.dataset.mode=state.mode;
+
+function chainText(){
+  if(state.mode==='subtract'){
+    if(!state.steps.length)return '';
+    return state.start+' − '+state.steps.join(' − ')+' = '+state.main;
+  }
+  if(state.mode==='add'){
+    if(!state.steps.length)return '';
+    if(state.steps.length===1){
+      // only show the 0 when a single number completes it instantly
+      return state.main===state.target? '0 + '+state.steps[0]+' = '+state.main : String(state.steps[0]);
+    }
+    return state.steps.join(' + ')+' = '+state.main;
+  }
+  return '';
+}
+function updateChain(){
+  const t=chainText();
+  if(state.mode==='subitise'||t===''){readout.classList.remove('show');return;}
+  readout.textContent=t;
+  readout.classList.add('show');
+}
+
+function renderMain(rollIn){
+  renderFace();
+  if(rollIn){
+    mainDie.classList.remove('roll');void mainDie.offsetWidth;
+    mainDie.classList.add('roll');
+    setTimeout(playThud,620);
+  }
+}
+function renderTray(){
+  tray.innerHTML='';
+  if(state.mode==='subitise'){
+    const nums=[1,2,3,4,5,6];
+    for(let i=nums.length-1;i>0;i--){const j=irand(0,i);const t=nums[i];nums[i]=nums[j];nums[j]=t;}
+    nums.forEach(function(n,i){
+      const d=document.createElement('div');
+      d.className='die num';
+      d.style.background=state.challenge?'#563E79':DIE_COLORS[n];
+      d.style.setProperty('--tilt',rand(-5,5).toFixed(1)+'deg');
+      d.style.setProperty('--d',(i*.05)+'s');
+      d.textContent=n;
+      tray.appendChild(d);
+      makeDraggable(d,n);
+    });
+    return;
+  }
+  const top=state.mode==='subtract'?state.main:state.target-state.main;
+  for(let v=1;v<=top;v++){
+    const d=document.createElement('div');
+    d.className='die';
+    d.style.background=DIE_COLORS[v];
+    d.style.setProperty('--tilt',rand(-6,6).toFixed(1)+'deg');
+    d.style.setProperty('--d',(v*.05)+'s');
+    d.innerHTML=faceSVG(v);
+    d.dataset.value=v;
+    tray.appendChild(d);
+    makeDraggable(d,v);
+  }
+}
+function newRound(){
+  state.celebrating=false;
+  celebrateEl.classList.remove('show');
+  let n;
+  if(state.mode==='subitise'){
+    do{n=irand(1,6);}while(n===state.last);
+    state.value=n;state.last=n;
+    if(state.challenge){
+      // fresh challenge run: reset streak and the 40-second countdown
+      state.streak=0;renderStarRow();startTimer();loadVoices();
+      $('#hintText').textContent='Get 10 in a row!';
+    }else{
+      $('#hintText').textContent='How many dots can you see?';
+    }
+  }else if(state.mode==='add'){
+    do{n=irand(2,6);}while(n===state.last&&Math.random()<.7);
+    state.target=n;state.main=0;state.start=0;state.steps=[];state.last=n;
+    $('#hintText').textContent='Make '+n+'?';
+    updateMiniFace();
+  }else{
+    do{n=irand(2,6);}while(n===state.last&&Math.random()<.7);
+    state.main=n;state.start=n;state.steps=[];state.last=n;
+    $('#hintText').textContent='Drag the dice to make 0!';
+  }
+  buildRow.innerHTML='';
+  updateChain();
+  renderMain(true);
+  renderTray();
+}
+
+/* ---------------- challenge mode ---------------- */
+function updateChallengeUI(){
+  document.body.classList.toggle('challenge',state.challenge);
+  $('#trophyBtn').classList.toggle('on',state.challenge);
+}
+/* star row: 5 stars fill gold for answers 1-5, then answers 6-10 upgrade
+   them one by one into decorated super stars */
+function renderStarRow(){
+  starRow.innerHTML='';
+  const s=state.streak;
+  const changed=s===0?-1:(s<=5?s-1:s-6);
+  for(let i=0;i<5;i++){
+    const sup=s-5>i, got=sup||s>i;
+    const d=document.createElement('div');
+    d.className='cstar'+(sup?' super':'')+(got?' got':'')+(i===changed?(sup?' newsuper':' newgot'):'');
+    const shape=sup
+      ? '<svg class="st" viewBox="0 0 24 24"><path d="M7 4h10l4 6-9 11L3 10z" fill="url(#gemGrad)" stroke="#43305F" stroke-width="1.6" stroke-linejoin="round"/><path d="M3 10h18M7 4l3 6M17 4l-3 6M12 21L8.2 10M12 21l3.8-11" fill="none" stroke="rgba(67,48,95,.4)" stroke-width=".9"/></svg>'
+      : '<svg class="st" viewBox="0 0 24 24"><path d="M12 2.2l2.9 6.2 6.8.8-5 4.6 1.4 6.7-6.1-3.4-6.1 3.4 1.4-6.7-5-4.6 6.8-.8z" stroke-width="1.6" stroke-linejoin="round" fill="'
+        +(got?'#FFBF2E':'#FFFBF4')+'" stroke="'+(got?'#43305F':'rgba(86,62,121,.35)')+'"/></svg>';
+    d.innerHTML='<div class="glow"></div>'+shape
+      +'<svg class="mini m1" viewBox="0 0 24 24"><path d="M12 3 Q13.8 10.2 21 12 Q13.8 13.8 12 21 Q10.2 13.8 3 12 Q10.2 10.2 12 3 Z" fill="#FFF8EE"/></svg>'
+      +'<svg class="mini m2" viewBox="0 0 24 24"><path d="M12 3 Q13.8 10.2 21 12 Q13.8 13.8 12 21 Q10.2 13.8 3 12 Q10.2 10.2 12 3 Z" fill="#FFBF2E"/></svg>';
+    if(sup){
+      d.querySelector('.m1').style.animationDelay=(-i*0.35)+'s';
+      d.querySelector('.m2').style.animationDelay=(-i*0.35-0.65)+'s';
+    }
+    starRow.appendChild(d);
+  }
+}
+function updateTimerPill(){
+  $('#bigTimerNum').textContent=state.timeLeft;
+  $('#bigTimer').classList.toggle('low',state.timeLeft<=10);
+}
+function startTimer(){
+  stopTimer();
+  state.timeLeft=40;updateTimerPill();
+  state.timerId=setInterval(()=>{
+    state.timeLeft--;
+    updateTimerPill();
+    if(state.timeLeft<=0)failChallenge('time');
+  },1000);
+}
+function stopTimer(){if(state.timerId){clearInterval(state.timerId);state.timerId=null;}}
+function nextChallengeRound(){
+  let n;do{n=irand(1,6);}while(n===state.last);
+  state.value=n;state.last=n;
+  renderMain(false);
+  mainDie.classList.remove('pop');void mainDie.offsetWidth;
+  mainDie.classList.add('pop');
+  renderTray();
+}
+function failChallenge(reason){
+  if(!state.challenge)return;
+  stopTimer();
+  state.celebrating=true;
+  playWrong();
+  if(reason==='time')speakChar('timeout');
+  $('#failPop').classList.add('open');
+}
+
+/* addition: stack dropped dice as building blocks with numerals hovering */
+function updateMiniFace(pop){
+  const m=$('#miniFace');
+  m.innerHTML=faceSVG(state.main,state.main===0);
+  if(pop){m.classList.remove('spark');void m.offsetWidth;m.classList.add('spark');}
+}
+function renderBuild(){
+  const n=state.steps.length;
+  if(state.mode!=='add'||!n)return;
+  buildRow.innerHTML='';
+  // snake layout: three blocks per row, columns stay aligned, and the
+  // connecting plus drops below the third block when the sum wraps
+  const wrap=n>3;
+  const cols=wrap?3:n;
+  const rows=Math.ceil(n/3);
+  const complete=state.main>=state.target;
+  const plusCols=(cols-1)+(complete?0:1);
+  const W=buildRow.clientWidth-8;
+  const H=dropRing.getBoundingClientRect().height-18;
+  // grow blocks to fill the zone (width- and height-limited), shrink as more arrive
+  const sizeW=Math.floor((W-(2*plusCols)*8)/(cols+plusCols*0.34));
+  const sizeH=Math.floor(H/(1.45*rows+0.55*(rows-1)));
+  const size=clamp(Math.min(sizeW,sizeH),30,132);
+  buildRow.style.setProperty('--bdie',size+'px');
+  buildRow.style.gridTemplateColumns='repeat('+((cols*2-1)+((!complete&&!wrap&&cols<3)?1:0))+',auto)';
+  state.steps.forEach(function(v,i){
+    const isNew=i===n-1;
+    const row=Math.floor(i/3), pos=i%3;
+    const evenRow=row%2===0;
+    // snake: even rows run left-to-right, odd rows run right-to-left,
+    // so the block after a wrap sits directly under the connecting plus
+    const unitCol=evenRow? 1+2*pos : 1+2*(2-pos);
+    if(i>0){
+      if(pos===0){
+        // wrap connector: below the last block of the row above
+        const vp=document.createElement('div');
+        vp.className='vplus'+(isNew?' new':'');
+        vp.textContent='+';
+        vp.style.gridColumn=String(evenRow?1:5);
+        vp.style.gridRow=String(2*row);
+        buildRow.appendChild(vp);
+      }else{
+        const p=document.createElement('div');
+        p.className='bplus'+(isNew?' new':'');
+        p.textContent='+';
+        p.style.gridColumn=String(evenRow? 2*pos : 2+2*(2-pos));
+        p.style.gridRow=String(1+2*row);
+        buildRow.appendChild(p);
+      }
+    }
+    const u=document.createElement('div');
+    u.className='bunit'+(isNew?' new':'');
+    u.style.gridColumn=String(unitCol);
+    u.style.gridRow=String(1+2*row);
+    const num=document.createElement('div');
+    num.className='bnum';num.textContent=v;
+    u.appendChild(num);
+    const dd=document.createElement('div');
+    dd.className='bdie';dd.style.background=DIE_COLORS[v];
+    dd.innerHTML=faceSVG(v);
+    u.appendChild(dd);
+    buildRow.appendChild(u);
+  });
+  // trailing plus while the sum is still building (never on a completed sum)
+  if(!complete){
+    const lastRow=Math.floor((n-1)/3), lastPos=(n-1)%3;
+    const lastEven=lastRow%2===0;
+    const lastCol=lastEven?1+2*lastPos:1+2*(2-lastPos);
+    const p=document.createElement('div');
+    p.className='bplus new';
+    p.textContent='+';
+    if(lastPos<2){
+      p.style.gridColumn=String(lastEven?lastCol+1:lastCol-1);
+      p.style.gridRow=String(1+2*lastRow);
+    }else{
+      // end of a row: the plus drops into the connector slot below it
+      p.style.gridColumn=String(lastEven?5:1);
+      p.style.gridRow=String(2*(lastRow+1));
+    }
+    buildRow.appendChild(p);
+  }
+}
+
+/* ---------------- drag & drop ---------------- */
+function overMain(x,y){
+  const el=state.mode==='add'?dropRing:mainDie;
+  const r=el.getBoundingClientRect();
+  const padX=r.width*.3,padY=r.height*.3;
+  return x>r.left-padX&&x<r.right+padX&&y>r.top-padY&&y<r.bottom+padY;
+}
+function makeDraggable(el,value){
+  el.addEventListener('pointerdown',function(e){
+    if(state.celebrating)return;
+    e.preventDefault();
+    audio();playPickup();
+    const rect=el.getBoundingClientRect();
+    const ghost=el.cloneNode(true);
+    ghost.classList.add('ghost');
+    ghost.style.width=rect.width+'px';
+    ghost.style.height=rect.height+'px';
+    document.body.appendChild(ghost);
+    el.style.opacity='.35';
+    const offX=e.clientX-rect.left,offY=e.clientY-rect.top;
+    let x=e.clientX-offX,y=e.clientY-offY,lastX=e.clientX,rot=0;
+    ghost.style.transform=`translate(${x}px,${y}px) scale(1.12)`;
+    function move(ev){
+      x=ev.clientX-offX;y=ev.clientY-offY;
+      const vx=ev.clientX-lastX;lastX=ev.clientX;
+      rot=clamp(rot*.75+vx*1.3,-16,16);
+      ghost.style.transform=`translate(${x}px,${y}px) rotate(${rot.toFixed(1)}deg) scale(1.12)`;
+      dropRing.classList.toggle('hot',overMain(ev.clientX,ev.clientY));
+    }
+    function finish(ev,dropIt){
+      removeEventListener('pointermove',move);
+      removeEventListener('pointerup',up);
+      removeEventListener('pointercancel',cancel);
+      dropRing.classList.remove('hot');
+      el.style.opacity='';
+      const onTarget=dropIt&&overMain(ev.clientX!==undefined?ev.clientX:lastX,(ev.clientY!==undefined?ev.clientY:y+offY));
+      const wrongSubitise=onTarget&&state.mode==='subitise'&&value!==state.value;
+      if(onTarget&&!wrongSubitise){
+        if(state.mode==='subitise'){
+          absorb(ghost,value,function(){
+            playPop();
+            if(state.challenge){
+              // green tick on the face, friendly voice says the number, then move on quickly
+              state.streak++;renderStarRow();
+              mainDie.innerHTML=tickSVG();
+              speakChar(NUMKEYS[value-1]);
+              if(state.streak>=10){
+                state.celebrating=true;stopTimer();
+                setTimeout(celebrate,450);
+              }else{
+                setTimeout(nextChallengeRound,600);
+              }
+            }else{
+              state.celebrating=true;setTimeout(celebrate,300);
+            }
+          });
+        }else{
+          absorb(ghost,value,function(){applyDrop(value);});
+        }
+      }else{
+        if(wrongSubitise){
+          playWrong();
+          el.classList.remove('wrong');void el.offsetWidth;el.classList.add('wrong');
+          if(state.challenge){
+            speakChar('wrong');
+            setTimeout(()=>failChallenge('wrong'),380);
+          }
+        }
+        ghost.classList.add('returning');
+        ghost.style.transform=`translate(${rect.left}px,${rect.top}px) rotate(0deg) scale(1)`;
+        setTimeout(()=>ghost.remove(),400);
+      }
+    }
+    function up(ev){finish(ev,true);}
+    function cancel(ev){finish(ev,false);}
+    addEventListener('pointermove',move);
+    addEventListener('pointerup',up);
+    addEventListener('pointercancel',cancel);
+  });
+}
+function absorb(ghost,value,after){
+  const r=(state.mode==='add'?dropRing:mainDie).getBoundingClientRect();
+  const cx=r.left+r.width/2,cy=r.top+r.height/2;
+  const gr=ghost.getBoundingClientRect();
+  ghost.animate([
+    {transform:ghost.style.transform},
+    {transform:`translate(${cx-gr.width/2}px,${cy-gr.height/2}px) scale(.15)`,opacity:.3}
+  ],{duration:260,easing:'cubic-bezier(.5,0,.8,.4)',fill:'forwards'});
+  setTimeout(()=>{ghost.remove();after();},240);
+}
+function applyDrop(v){
+  if(state.celebrating)return;
+  const prev=state.main;
+  if(state.mode==='subtract')state.main=Math.max(0,prev-v);
+  else state.main=Math.min(state.target,prev+v);
+  state.steps.push(v);
+  playPop();
+  // bounce + swap face mid-bounce
+  mainDie.classList.remove('pop');void mainDie.offsetWidth;
+  mainDie.classList.add('pop');
+  setTimeout(()=>{renderFace();if(state.mode==='add'){renderBuild();updateMiniFace(true);}},140);
+  // numeral chip
+  numChip.textContent=state.main;
+  numChip.classList.remove('tick');void numChip.offsetWidth;
+  numChip.classList.add('tick');
+  // running chain "6 − 2 − 3 = 1" / "0 + 2 + 3 = 5"
+  updateChain();
+  // floating "−v" / "+v" (anchored to the active drop zone - in add mode the big die is hidden)
+  const r=(state.mode==='add'?dropRing:mainDie).getBoundingClientRect();
+  const f=document.createElement('div');
+  f.className='floaty';
+  f.textContent=(state.mode==='subtract'?'−':'+')+v;
+  f.style.left=(r.left+r.width/2)+'px';
+  f.style.top=(r.top+6)+'px';
+  document.body.appendChild(f);
+  setTimeout(()=>f.remove(),1050);
+  const done=state.mode==='subtract'?state.main===0:state.main===state.target;
+  if(done){
+    state.celebrating=true;
+    setTimeout(celebrate,420);
+  }else{
+    setTimeout(renderTray,180);
+  }
+}
+
+/* ---------------- celebration ---------------- */
+const CHEERS=['Amazing!','Great!','Perfect!','Fantastic!','Incredible!','Brilliant!','Wonderful!','Superb!','Awesome!','Excellent!'];
+function celebrate(){
+  mainDie.innerHTML=faceSVG(0);
+  mainDie.classList.remove('pop');void mainDie.offsetWidth;
+  mainDie.classList.add('pop');
+  const zt=$('#zeroTextTxt');
+  let w;
+  do{w=CHEERS[irand(0,CHEERS.length-1)];}while(w===state.lastWord);
+  state.lastWord=w;
+  zt.textContent=w;
+  fitZeroText();
+  $('#zeroSub').textContent=state.mode==='subitise'?(state.challenge?'10 in a row!':'You spotted it!'):chainText();
+  celebrateEl.classList.add('show');
+  celebrateEl.classList.remove('play');void celebrateEl.offsetWidth;
+  celebrateEl.classList.add('play');
+  playWin();
+  if(state.challenge)speakChar('win');
+  const r=(state.mode==='add'?dropRing:mainDie).getBoundingClientRect();
+  const cx=r.left+r.width/2,cy=r.top+r.height/2;
+  burst(cx,cy,70,-7,7,-12,-3);
+  setTimeout(()=>burst(0,innerHeight*.8,55,3.5,9,-13,-7),180);
+  setTimeout(()=>burst(innerWidth,innerHeight*.8,55,-9,-3.5,-13,-7),320);
+  // stars
+  state.stars++;
+  store.set('dotdrop.stars',state.stars);
+  if(state.challenge){starCount.textContent=state.stars;}
+  else{setTimeout(starFly,850);}
+  celebrateEl._t=setTimeout(newRound,3400);
+}
+function fitZeroText(){
+  const t=$('#zeroTextTxt');
+  t.setAttribute('font-size','104');
+  try{
+    const w=t.getComputedTextLength();
+    if(w>296)t.setAttribute('font-size',String(Math.floor(104*296/w)));
+  }catch(e){}
+}
+function starFly(){
+  const from=(state.mode==='add'?dropRing:mainDie).getBoundingClientRect();
+  const to=starCount.getBoundingClientRect();
+  const s=document.createElement('div');
+  s.innerHTML='<svg width="34" height="34" viewBox="0 0 24 24"><path d="M12 2.2l2.9 6.2 6.8.8-5 4.6 1.4 6.7-6.1-3.4-6.1 3.4 1.4-6.7-5-4.6 6.8-.8z" fill="#FFBF2E" stroke="#43305F" stroke-width="1.6" stroke-linejoin="round"/></svg>';
+  s.style.cssText=`position:fixed;z-index:75;pointer-events:none;left:${from.left+from.width/2-17}px;top:${from.top+from.height/2-17}px`;
+  document.body.appendChild(s);
+  const dx=(to.left+to.width/2)-(from.left+from.width/2);
+  const dy=(to.top+to.height/2)-(from.top+from.height/2);
+  s.animate([
+    {transform:'translate(0,0) scale(1) rotate(0deg)',opacity:1},
+    {transform:`translate(${dx*.5}px,${dy*.6-46}px) scale(1.25) rotate(160deg)`,opacity:1,offset:.55},
+    {transform:`translate(${dx}px,${dy}px) scale(.5) rotate(340deg)`,opacity:.9}
+  ],{duration:750,easing:'cubic-bezier(.4,0,.4,1)',fill:'forwards'});
+  setTimeout(()=>{
+    s.remove();
+    starCount.textContent=state.stars;
+    starCount.classList.remove('bump');void starCount.offsetWidth;
+    starCount.classList.add('bump');
+  },740);
+}
+
+/* ---------------- buttons ---------------- */
+$('#soundBtn').addEventListener('click',()=>{
+  soundOn=!soundOn;
+  store.set('dotdrop.sound',soundOn?'on':'off');
+  $('#soundOnIco').style.display=soundOn?'':'none';
+  $('#soundOffIco').style.display=soundOn?'none':'';
+  $('#soundBtn').classList.toggle('off',!soundOn);
+  if(soundOn)playPickup();
+});
+if(!soundOn){
+  $('#soundOnIco').style.display='none';
+  $('#soundOffIco').style.display='';
+  $('#soundBtn').classList.add('off');
+}
+/* challenge mode toggle + fail popup */
+$('#trophyBtn').addEventListener('click',()=>{
+  if(state.celebrating)return;
+  audio();playPickup();
+  state.challenge=!state.challenge;
+  if(!state.challenge)stopTimer();
+  updateChallengeUI();
+  newRound();
+});
+$('#failPop').addEventListener('pointerdown',()=>{
+  $('#failPop').classList.remove('open');
+  state.celebrating=false;
+  newRound();
+});
+
+/* mode menu */
+const modeMenu=$('#modeMenu');
+function updateModeUI(){
+  $('#modeGlyph').textContent=MODES[state.mode].glyph;
+  document.querySelectorAll('.modeRow').forEach(r=>r.classList.toggle('current',r.dataset.mode===state.mode));
+}
+updateModeUI();
+$('#modeBtn').addEventListener('click',()=>{audio();playPickup();modeMenu.classList.add('open');});
+modeMenu.addEventListener('pointerdown',e=>{if(e.target===modeMenu)modeMenu.classList.remove('open');});
+document.querySelectorAll('.modeRow').forEach(r=>{
+  r.addEventListener('click',()=>{
+    state.mode=r.dataset.mode;
+    store.set('dotdrop.mode',state.mode);
+    document.body.dataset.mode=state.mode;
+    if(state.challenge){state.challenge=false;stopTimer();}
+    updateChallengeUI();
+    updateModeUI();
+    modeMenu.classList.remove('open');
+    playPickup();
+    newRound();
+  });
+});
+celebrateEl.addEventListener('pointerdown',()=>{
+  if(state.celebrating)newRound();
+});
+
+/* ---------------- start ---------------- */
+$('#startDie').innerHTML=faceSVG(6);
+$('#startDie').style.background='#F28482';
+function begin(){
+  audio();
+  const ss=$('#startScreen');
+  ss.style.transition='opacity .35s';ss.style.opacity='0';
+  setTimeout(()=>ss.style.display='none',360);
+  newRound();
+}
+$('#playBtn').addEventListener('click',begin);
+
+/* block iOS bounce-scroll / pinch / long-press menu */
+document.addEventListener('touchmove',e=>e.preventDefault(),{passive:false});
+document.addEventListener('gesturestart',e=>e.preventDefault());
+addEventListener('contextmenu',e=>e.preventDefault());
+addEventListener('dblclick',e=>e.preventDefault());
+
+/* debug entry points for testing */
+const qp=new URLSearchParams(location.search);
+if(qp.get('mode')&&MODES[qp.get('mode')]){state.mode=qp.get('mode');document.body.dataset.mode=state.mode;updateModeUI();}
+if(qp.get('screen')==='play'){
+  $('#startScreen').style.display='none';
+  newRound();
+  const fm=parseInt(qp.get('main'),10);
+  if(fm>=2&&fm<=6){state.main=fm;state.start=fm;state.last=fm;state.steps=[];renderMain(false);renderTray();updateChain();}
+  const ft=parseInt(qp.get('target'),10);
+  if(ft>=2&&ft<=6){state.target=ft;state.main=0;state.steps=[];$('#hintText').textContent='Make '+ft+'?';updateMiniFace();renderTray();updateChain();}
+  if(qp.get('fill')&&state.mode==='add'){
+    state.steps=qp.get('fill').split(',').map(Number).filter(v=>v>=1&&v<=6);
+    state.main=state.steps.reduce((a,b)=>a+b,0);
+    renderBuild();renderTray();updateChain();
+  }
+}else if(qp.get('screen')==='win'){
+  $('#startScreen').style.display='none';
+  state.main=0;renderMain(false);
+  celebrate();
+  if(qp.get('hold'))clearTimeout(celebrateEl._t);
+}
+if(qp.get('menu'))$('#modeMenu').classList.add('open');
+if(qp.get('browser'))document.documentElement.classList.add('browser');
+if(qp.get('challenge')&&state.mode==='subitise'){state.challenge=true;updateChallengeUI();newRound();}
+const fst=parseInt(qp.get('streak'),10);
+if(fst>0&&fst<=10){state.streak=fst;renderStarRow();}
+const ftm=parseInt(qp.get('time'),10);
+if(ftm>0&&ftm<40){state.timeLeft=ftm;updateTimerPill();}
+})();
+</script>
+</body>
+</html>
